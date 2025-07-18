@@ -8,29 +8,60 @@
 </head>
 <body>
     <section>
-        <form>
-            <h1>registro</h1>
+        <form id="formRegistro" onsubmit="event.preventDefault(); registrarUsuario();">
+            <h1>Registro</h1>
+
             <div class="inputbox">
                 <ion-icon name="mail-outline"></ion-icon>
-                <input type="text" required>
+                <input type="text" id="nombre" required>
                 <label for="">Nombre Completo</label>
             </div>
+
             <div class="inputbox">
                 <ion-icon name="mail-outline"></ion-icon>
-                <input type="Email" required>
+                <input type="email" id="correo" required>
                 <label for="">Email</label>
             </div>
+
             <div class="inputbox">
                 <ion-icon name="lock-closed-outline"></ion-icon>
-                <input type="password" required>
+                <input type="password" id="contrasena" required>
                 <label for="">Contraseña</label>
             </div>
 
-            <button>Registrarme</button>
+            <button type="submit">Registrarme</button>
+
             <div class="register">
-                <p>Ya tienes una cuenta? <a href="index.html">Ingresa Ahora!</a></p>
+                <p>¿Ya tienes una cuenta? <a href="index.html">¡Ingresa Ahora!</a></p>
             </div>
         </form>
     </section>
+
+    <script>
+        async function registrarUsuario() {
+            const nombre = document.getElementById('nombre').value;
+            const correo = document.getElementById('correo').value;
+            const contrasena = document.getElementById('contrasena').value;
+
+            try {
+            const respuesta = await fetch('http://localhost:3000/registro', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre, correo, contrasena })
+            });
+
+            const data = await respuesta.json();
+            alert(data.mensaje);
+
+            if (respuesta.ok) {
+                document.getElementById('formRegistro').reset(); // Limpia el formulario
+            }
+            } catch (error) {
+            alert('Error al conectar con el servidor');
+            console.error(error);
+            }
+        }
+    </script>
+
 </body>
 </html>
