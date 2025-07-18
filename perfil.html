@@ -12,16 +12,16 @@
       <h1>DocuSmart</h1>
     </div>
     <h2>Mi Perfil</h2>
-    <form>
+    <form id="formPerfil">
       <label for="nombre">Nombre</label>
-      <input type="text" id="nombre" value="Michel Quirós">
+      <input type="text" id="nombre" disabled>
 
       <label for="correo">Correo electrónico</label>
-      <input type="email" id="correo" value="michel@example.com">
+      <input type="email" id="correo" disabled>
 
       <label for="preferencias">Preferencias de contenido</label>
       <select id="preferencias" multiple>
-        <option selected>Ciencia</option>
+        <option>Ciencia</option>
         <option>Historia</option>
         <option>Tecnología</option>
         <option>Arte</option>
@@ -32,5 +32,52 @@
     </form>
     <a class="back-link" href="home.html">Volver a inicio</a>
   </div>
+
+  <script>
+    async function cargarPerfil() {
+      const token = localStorage.getItem("token");
+      console.log("🔹 Token en localStorage:", token);
+
+      if (!token) {
+        alert("No has iniciado sesión");
+        window.location.href = "login.html";
+        return;
+      }
+
+      try {
+        const respuesta = await fetch("http://localhost:3000/perfil", {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        console.log("🔹 Código de respuesta:", respuesta.status);
+        const data = await respuesta.json();
+        console.log("🔹 Respuesta del servidor:", data);
+
+        if (respuesta.ok) {
+          document.getElementById("nombre").value = data.NOMBRE;
+          document.getElementById("correo").value = data.CORREO;
+        } else {
+          alert(data.mensaje || "Error en el servidor");
+          if (respuesta.status === 401 || respuesta.status === 403) {
+            localStorage.removeItem("token");
+            window.location.href = "login.html";
+          }
+        }
+      } catch (error) {
+        alert("Error al conectar con el servidor");
+        console.error("❌ Error de conexión:", error);
+      }
+    }
+
+    cargarPerfil();
+
+    document.getElementById("formPerfil").addEventListener("submit", function (e) {
+      e.preventDefault();
+      alert("Guardado de preferencias aún no implementado ✅");
+    });
+  </script>
 </body>
 </html>

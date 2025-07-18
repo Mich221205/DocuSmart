@@ -7,24 +7,53 @@
   <link rel="stylesheet" href="StyleIndex.css">
 </head>
 <body>
-    <section>
-        <form>
-            <h1>Login</h1>
-            <div class="inputbox">
-                <!-- <ion-icon name="mail-outline"></ion-icon> -->
-                <input type="email" required>
-                <label for="">Email</label>
-            </div>
-            <div class="inputbox">
-                <!-- <ion-icon name="lock-closed-outline"></ion-icon> -->
-                <input type="password" required>
-                <label for="">Password</label>
-            </div>
-            <button>Log in</button>
-            <div class="register">
-                <p>¿No tienes una cuenta? <a href="registro.html">¡Registrate Ahora!</a></p>
-            </div>
-        </form>
-    </section>
+  <section>
+    <form id="formLogin">
+      <h1>Login</h1>
+      <div class="inputbox">
+        <input type="email" id="correo" required>
+        <label for="correo">Email</label>
+      </div>
+      <div class="inputbox">
+        <input type="password" id="contrasena" required>
+        <label for="contrasena">Password</label>
+      </div>
+      <button type="submit">Log in</button>
+      <div class="register">
+        <p>¿No tienes una cuenta? <a href="registro.html">¡Regístrate Ahora!</a></p>
+      </div>
+    </form>
+  </section>
+
+  <script>
+    document.getElementById("formLogin").addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const correo = document.getElementById("correo").value;
+      const contrasena = document.getElementById("contrasena").value;
+
+      try {
+        const respuesta = await fetch("http://localhost:3000/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ correo, contrasena })
+        });
+
+        const data = await respuesta.json();
+        alert(data.mensaje);
+
+        if (respuesta.ok) {
+          // ✅ Guardamos el token en localStorage
+          localStorage.setItem("token", data.token);
+          // ✅ Redirigimos al perfil
+          window.location.href = "perfil.html";
+        }
+      } catch (error) {
+        alert("Error al conectar con el servidor");
+        console.error(error);
+      }
+    });
+  </script>
 </body>
 </html>
+
