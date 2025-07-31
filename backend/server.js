@@ -1,23 +1,22 @@
+// =========================
+// 📄 server.js completo
+// =========================
+require('dotenv').config();
 const express = require('express');
-const mysql = require('mysql2');
-const bodyParser = require('body-parser');
 const cors = require('cors');
-const bcrypt = require('bcrypt'); 
+const mysql = require('mysql2');
 const jwt = require('jsonwebtoken');
-require('dotenv').config(); // ✅ Para usar la SECRET_KEY desde .env
+const bcrypt = require('bcrypt');
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-const saltRounds = 10;
-const SECRET_KEY = process.env.SECRET_KEY; // ✅ Clave secreta para JWT
-
-// ✅ Conexión a MySQL
+// 🔹 Configurar MySQL
 const db = mysql.createConnection({
   host: 'localhost',
-  port: 3306,
   user: 'root',
+  password: '', // agrega tu password si la tienes
   database: 'docusmart'
 });
 
@@ -29,105 +28,159 @@ db.connect(err => {
   console.log('✅ Conectado a MySQL');
 });
 
-// ✅ REGISTRO
-app.post('/registro', (req, res) => {
+const SECRET_KEY = process.env.SECRET_KEY || "miclaveultrasecreta";
+
+// =========================
+// 🔹 REGISTRO
+// =========================
+app.post('/registro', async (req, res) => {
   const { nombre, correo, contrasena } = req.body;
 
   if (!nombre || !correo || !contrasena) {
-    return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' });
+    return res.status(400).json({ mensaje: "Todos los campos son obligatorios" });
   }
 
-  db.query('SELECT * FROM USUARIO WHERE CORREO = ?', [correo], (err, results) => {
-    if (err) return res.status(500).json({ mensaje: 'Error en el servidor' });
+  const hash = await bcrypt.hash(contrasena, 10);
 
-    if (results.length > 0) {
-      return res.status(400).json({ mensaje: 'El correo ya está en uso' });
+  db.query(
+    "INSERT INTO USUARIO (NOMBRE, CORREO, CONTRASENNA) VALUES (?, ?, ?)",
+    [nombre, correo, hash],
+    (err, result) => {
+      if (err) {
+        console.error("❌ Error MySQL:", err);
+        return res.status(500).json({ mensaje: "Error en el servidor" });
+      }
+      res.json({ mensaje: "Usuario registrado con éxito" });
     }
-
-    bcrypt.hash(contrasena, saltRounds, (err, hash) => {
-      if (err) return res.status(500).json({ mensaje: 'Error al procesar la contraseña' });
-
-      console.log("✅ Contraseña hasheada:", hash);
-
-      db.query(
-        'INSERT INTO USUARIO (NOMBRE, CORREO, CONTRASENNA) VALUES (?, ?, ?)',
-        [nombre, correo, hash],
-        (err) => {
-          if (err) return res.status(500).json({ mensaje: 'Error al registrar el usuario' });
-          res.status(200).json({ mensaje: 'Usuario registrado exitosamente' });
-        }
-      );
-    });
-  });
+  );
 });
 
-// ✅ LOGIN (Devuelve un token JWT)
+// =========================
+// 🔹 LOGIN
+// =========================
 app.post('/login', (req, res) => {
   const { correo, contrasena } = req.body;
 
-  if (!correo || !contrasena) {
-    return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' });
-  }
-
-  db.query('SELECT * FROM USUARIO WHERE CORREO = ?', [correo], (err, results) => {
-    if (err) return res.status(500).json({ mensaje: 'Error en el servidor' });
-
-    if (results.length === 0) {
-      return res.status(400).json({ mensaje: 'Correo o contraseña incorrectos' });
-    }
+  db.query("SELECT * FROM USUARIO WHERE CORREO = ?", [correo], async (err, results) => {
+    if (err) return res.status(500).json({ mensaje: "Error en el servidor" });
+    if (results.length === 0) return res.status(401).json({ mensaje: "Usuario no encontrado" });
 
     const usuario = results[0];
 
-    bcrypt.compare(contrasena, usuario.CONTRASENNA, (err, esValida) => {
-      if (err) return res.status(500).json({ mensaje: 'Error al procesar la contraseña' });
+    // 🟢 Depuración
+    console.log("Usuario encontrado:", usuario);
+    console.log("Contraseña recibida:", contrasena);
+    console.log("Hash en BD:", usuario.CONTRASENNA);
 
-      if (!esValida) {
-        return res.status(400).json({ mensaje: 'Correo o contraseña incorrectos' });
-      }
-
-    const token = jwt.sign(
-      { id: usuario.ID_USUARIO, correo: usuario.CORREO },
-      SECRET_KEY,
-      { expiresIn: '2h' }
-    );
-
-
-      res.status(200).json({ mensaje: 'Login exitoso', token });
-    });
-  });
-});
-
-// ✅ Middleware para verificar el token
-function verificarToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) return res.status(401).json({ mensaje: 'Token requerido' });
-
-  jwt.verify(token, SECRET_KEY, (err, usuario) => {
-    if (err) return res.status(403).json({ mensaje: 'Token inválido o expirado' });
-
-    req.usuario = usuario;
-    next();
-  });
-}
-
-// ✅ PERFIL (Ruta protegida)
-app.get('/perfil', verificarToken, (req, res) => {
-  const userId = req.usuario.id;
-
-  db.query('SELECT ID_USUARIO, NOMBRE, CORREO FROM USUARIO WHERE ID_USUARIO = ?', [userId], (err, results) => {
-    if (err) return res.status(500).json({ mensaje: 'Error en el servidor' });
-
-    if (results.length === 0) {
-      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    if (!contrasena || !usuario.CONTRASENNA) {
+      return res.status(400).json({ mensaje: "Datos incompletos para comparar contraseñas" });
     }
 
-    res.status(200).json(results[0]);
+    const match = await bcrypt.compare(contrasena, usuario.CONTRASENNA);
+
+    if (!match) return res.status(401).json({ mensaje: "Contraseña incorrecta" });
+
+    const token = jwt.sign({ id: usuario.ID_USUARIO }, SECRET_KEY, { expiresIn: "1h" });
+    res.json({ mensaje: "Login correcto", token });
   });
 });
 
-// ✅ Iniciar el servidor
-app.listen(3000, () => {
-  console.log('🚀 Servidor corriendo en http://localhost:3000');
+// =========================
+// 🔹 OBTENER PERFIL
+// =========================
+app.get("/perfil", (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1];
+  if (!token) return res.status(401).json({ mensaje: "Token no proporcionado" });
+
+  try {
+    const decoded = jwt.verify(token, SECRET_KEY);
+    const userId = decoded.id;
+
+  const sql = `
+    SELECT 
+      u.ID_USUARIO, 
+      u.NOMBRE, 
+      u.CORREO,
+      GROUP_CONCAT(g.DESCRIPCION) AS PREFERENCIAS
+    FROM USUARIO u
+    LEFT JOIN PREFERENCIAS p ON u.ID_USUARIO = p.ID_USUARIO
+    LEFT JOIN GENERO g ON p.ID_GENERO = g.ID_GENERO
+    WHERE u.ID_USUARIO = ?
+    GROUP BY u.ID_USUARIO, u.NOMBRE, u.CORREO
+  `;
+
+
+    db.query(sql, [userId], (err, results) => {
+      if (err) return res.status(500).json({ mensaje: "Error en la base de datos" });
+      if (results.length === 0) return res.status(404).json({ mensaje: "Usuario no encontrado" });
+
+      const row = results[0];
+      const preferencias = row.PREFERENCIAS ? row.PREFERENCIAS.split(",") : [];
+
+      res.json({
+        ID_USUARIO: row.ID_USUARIO,
+        NOMBRE: row.NOMBRE,
+        CORREO: row.CORREO,
+        PREFERENCIAS: preferencias
+      });
+    });
+
+  } catch {
+    return res.status(403).json({ mensaje: "Token inválido o expirado" });
+  }
 });
+
+// =========================
+// 🔹 ACTUALIZAR PREFERENCIAS
+// =========================
+app.put("/perfil", (req, res) => {
+  const token = req.headers["authorization"]?.split(" ")[1];
+  if (!token) return res.status(401).json({ mensaje: "Token no proporcionado" });
+
+  try {
+    const decoded = jwt.verify(token, SECRET_KEY);
+    const userId = decoded.id;
+    const { preferencias } = req.body; // ["Ciencia","Arte"]
+
+    db.query("DELETE FROM PREFERENCIAS WHERE ID_USUARIO = ?", [userId], (err) => {
+      if (err) return res.status(500).json({ mensaje: "Error al limpiar preferencias" });
+
+      if (!preferencias || preferencias.length === 0) {
+        return res.json({ mensaje: "Preferencias actualizadas" });
+      }
+
+      // Obtener IDs de GENERO
+      const placeholders = preferencias.map(() => "?").join(",");
+      db.query(
+        `SELECT ID_GENERO, DESCRIPCION FROM GENERO WHERE DESCRIPCION IN (${placeholders})`,
+        preferencias,
+        (err2, rows) => {
+          if (err2) return res.status(500).json({ mensaje: "Error al buscar géneros" });
+
+          // Mapear IDs
+          const values = rows.map(r => [userId, r.ID_GENERO]);
+
+          console.log("Valores a insertar:", values);
+
+          db.query(
+            "INSERT INTO PREFERENCIAS (ID_USUARIO, ID_GENERO) VALUES ?",
+            [values],
+            (err3) => {
+              if (err3) return res.status(500).json({ mensaje: "Error al guardar preferencias" });
+              res.json({ mensaje: "Preferencias guardadas correctamente" });
+            }
+          );
+        }
+      );
+    });
+  } catch {
+    return res.status(403).json({ mensaje: "Token inválido o expirado" });
+  }
+});
+
+
+// =========================
+// 🔹 INICIAR SERVIDOR
+// =========================
+const PORT = 3000;
+app.listen(PORT, () => console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`));

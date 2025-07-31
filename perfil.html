@@ -36,8 +36,6 @@
   <script>
     async function cargarPerfil() {
       const token = localStorage.getItem("token");
-      console.log("🔹 Token en localStorage:", token);
-
       if (!token) {
         alert("No has iniciado sesión");
         window.location.href = "login.html";
@@ -47,18 +45,23 @@
       try {
         const respuesta = await fetch("http://localhost:3000/perfil", {
           method: "GET",
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
+          headers: { "Authorization": `Bearer ${token}` }
         });
 
-        console.log("🔹 Código de respuesta:", respuesta.status);
         const data = await respuesta.json();
-        console.log("🔹 Respuesta del servidor:", data);
 
         if (respuesta.ok) {
           document.getElementById("nombre").value = data.NOMBRE;
           document.getElementById("correo").value = data.CORREO;
+
+          if (data.PREFERENCIAS && Array.isArray(data.PREFERENCIAS)) {
+            const selectPref = document.getElementById("preferencias");
+            for (let option of selectPref.options) {
+              if (data.PREFERENCIAS.includes(option.text)) {
+                option.selected = true;
+              }
+            }
+          }
         } else {
           alert(data.mensaje || "Error en el servidor");
           if (respuesta.status === 401 || respuesta.status === 403) {
@@ -74,9 +77,28 @@
 
     cargarPerfil();
 
-    document.getElementById("formPerfil").addEventListener("submit", function (e) {
+    // Guardar preferencias
+    document.getElementById("formPerfil").addEventListener("submit", async function (e) {
       e.preventDefault();
-      alert("Guardado de preferencias aún no implementado ✅");
+      const token = localStorage.getItem("token");
+      const selectPref = document.getElementById("preferencias");
+      const seleccionadas = Array.from(selectPref.selectedOptions).map(opt => opt.text);
+
+      try {
+        const respuesta = await fetch("http://localhost:3000/perfil", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ preferencias: seleccionadas })
+        });
+
+        const data = await respuesta.json();
+        alert(data.mensaje || "Preferencias guardadas ✅");
+      } catch (error) {
+        alert("Error al conectar con el servidor");
+      }
     });
   </script>
 </body>
