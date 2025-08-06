@@ -9,6 +9,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 
 const app = express();
+app.use(express.static(__dirname)); 
+app.use('/css', express.static(__dirname + '/css'));
 app.use(cors());
 app.use(express.json());
 
@@ -178,6 +180,75 @@ app.put("/perfil", (req, res) => {
   }
 });
 
+// =========================
+// 🔹 RECOMENDACIONES PERSONALIZADAS
+// =========================
+app.get('/recomendaciones/:idUsuario', (req, res) => {
+  const userId = req.params.idUsuario;
+
+  const sql = `
+    SELECT 
+      d.ID_DOCUMENTAL,
+      d.TITULO,
+      d.DESCRIPCION,
+      g.DESCRIPCION AS GENERO,
+      MAX(img.ruta_imagen) AS ruta_imagen
+    FROM documental d
+    JOIN preferencias p ON d.ID_GENERO = p.ID_GENERO
+    JOIN genero g ON d.ID_GENERO = g.ID_GENERO
+    LEFT JOIN historial_visualizacion hv ON d.ID_DOCUMENTAL = hv.ID_DOCUMENTAL AND hv.ID_USUARIO = ?
+    LEFT JOIN imagenes_documentales img ON d.ID_DOCUMENTAL = img.id_documental
+    WHERE p.ID_USUARIO = ?
+      AND hv.ID_DOCUMENTAL IS NULL
+    GROUP BY d.ID_DOCUMENTAL, d.TITULO, d.DESCRIPCION, g.DESCRIPCION
+    LIMIT 10
+  `;
+
+  db.query(sql, [userId, userId], (err, results) => {
+    if (err) {
+      console.error("❌ Error en recomendaciones:", err);
+      return res.status(500).json({ mensaje: "Error al obtener recomendaciones" });
+    }
+
+    res.json(results);
+  });
+});
+
+app.get('/documental/:id', (req, res) => {
+  console.log("📥 Petición recibida para ID:", req.params.id); // <--- agregá esto
+
+  const id = req.params.id;
+  const sql = `
+    SELECT 
+      d.ID_DOCUMENTAL,
+      d.TITULO,
+      d.DESCRIPCION,
+      d.DURACION,
+      d.FECHA_PUBLICACIÓN,
+      g.DESCRIPCION AS GENERO,
+      vd.ruta_video,
+      img.ruta_imagen
+    FROM documental d
+    JOIN genero g ON d.ID_GENERO = g.ID_GENERO
+    LEFT JOIN video_documentales vd ON d.ID_DOCUMENTAL = vd.ID_DOCUMENTAL
+    LEFT JOIN imagenes_documentales img ON d.ID_DOCUMENTAL = img.id_documental
+    WHERE d.ID_DOCUMENTAL = ?
+  `;
+
+  db.query(sql, [id], (err, results) => {
+    if (err) {
+      console.error("❌ Error SQL:", err);
+      return res.status(500).json({ mensaje: "Error al obtener documental" });
+    }
+
+    if (results.length === 0) {
+      console.warn("⚠️ Documental no encontrado para ID:", id);
+      return res.status(404).json({ mensaje: "Documental no encontrado" });
+    }
+
+    res.json(results[0]);
+  });
+});
 
 // =========================
 // 🔹 INICIAR SERVIDOR

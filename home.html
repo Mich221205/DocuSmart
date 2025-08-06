@@ -25,23 +25,68 @@
     </div>
     <h2>Recomendaciones para ti</h2>
     <div class="recommendations">
-      <div class="card">
-        <img src="img/historia_universo.png" alt="La Historia del Universo">
-        <div class="card-content">
-          <h3>La Historia del Universo</h3>
-          <p>Categoría: Ciencia</p>
-          <a href="detalle.html"><button>Ver más</button></a>
-        </div>
-      </div>
-      <div class="card">
-        <img src="img/cultura_maya.png" alt="Arte y Cultura Maya">
-        <div class="card-content">
-          <h3>Arte y Cultura Maya</h3>
-          <p>Categoría: Historia</p>
-          <a href="detalle.html"><button>Ver más</button></a>
-        </div>
-      </div>
+      <!-- Las recomendaciones reales se insertarán aquí dinámicamente -->
     </div>
+
   </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      window.location.href = "index.html"; // redirige si no hay sesión
+      return;
+    }
+
+    fetch("http://localhost:3000/perfil", {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    .then(res => res.json())
+    .then(user => {
+      const idUsuario = user.ID_USUARIO;
+      return fetch(`http://localhost:3000/recomendaciones/${idUsuario}`);
+
+    })
+    .then(res => res.json())
+    .then(documentales => {
+      const contenedor = document.querySelector(".recommendations");
+      contenedor.innerHTML = ""; // limpiar las tarjetas actuales
+
+      if (documentales.length === 0) {
+        contenedor.innerHTML = "<p>No hay recomendaciones por ahora.</p>";
+        return;
+      }
+
+      documentales.forEach(doc => {
+        const card = document.createElement("div");
+        card.classList.add("card");
+
+        const img = document.createElement("img");
+        img.src = doc.ruta_imagen || "img/default.png"; // imagen por defecto si no hay
+        img.alt = doc.TITULO;
+
+        const content = document.createElement("div");
+        content.classList.add("card-content");
+
+        content.innerHTML = `
+          <h3>${doc.TITULO}</h3>
+          <p>Categoría: ${doc.GENERO}</p>
+          <a href="detalle.html?id=${doc.ID_DOCUMENTAL}"><button>Ver más</button></a>
+        `;
+
+        card.appendChild(img);
+        card.appendChild(content);
+        contenedor.appendChild(card);
+      });
+    })
+    .catch(err => {
+      console.error("❌ Error cargando recomendaciones:", err);
+    });
+  });
+</script>
+
+
 </body>
 </html>

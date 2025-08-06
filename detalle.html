@@ -12,20 +12,49 @@
       <h1>DocuSmart</h1>
     </div>
     <h2>Detalle del Documental</h2>
-    <h3>La Historia del Universo</h3>
-    <p><strong>Duración:</strong> 45 minutos</p>
-    <p><strong>Categoría:</strong> Ciencia</p>
-    <p><strong>Descripción:</strong> Un viaje a través del tiempo para entender el origen del universo.</p>
-
-    <div class="buttons">
-      <button>▶ Ver ahora</button>
-      <button>👍 Me gusta</button>
-      <button>👎 No me gusta</button>
-      <button>🚫 No me interesa</button>
+    
+    <div id="contenido">
+      <h3>Cargando...</h3>
     </div>
 
     <a class="back-link" href="home.html">Volver a recomendaciones</a>
   </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("id");
+
+      if (!id) {
+        document.getElementById("contenido").innerHTML = "<p>ID no proporcionado.</p>";
+        return;
+      }
+
+      fetch(`http://localhost:3000/documental/${id}`)
+        .then(res => res.json())
+        .then(doc => {
+          const cont = document.getElementById("contenido");
+
+          cont.innerHTML = `
+            <img src="${doc.ruta_imagen || 'img/default.png'}" alt="${doc.TITULO}" style="max-width: 100%; margin-bottom: 20px;">
+            <h3>${doc.TITULO}</h3>
+            <p><strong>Duración:</strong> ${doc.DURACION}</p>
+            <p><strong>Categoría:</strong> ${doc.GENERO}</p>
+            <p><strong>Descripción:</strong> ${doc.DESCRIPCION}</p>
+
+            <div class="buttons">
+              <a href="${doc.ruta_video}" target="_blank"><button>▶ Ver ahora</button></a>
+              <button>👍 Me gusta</button>
+              <button>👎 No me gusta</button>
+              <button>🚫 No me interesa</button>
+            </div>
+          `;
+        })
+        .catch(err => {
+          console.error("❌ Error al obtener detalle:", err);
+          document.getElementById("contenido").innerHTML = "<p>Error al cargar el documental.</p>";
+        });
+    });
+  </script>
 </body>
 </html>
-

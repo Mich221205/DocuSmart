@@ -86,10 +86,13 @@
       margin-bottom: 20px;
     }
 
-_card    .recommendations {
+    .recommendations {
       display: grid;
+      justify-content: center; /* Centra las tarjetas si hay pocas */
       grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
       gap: 20px;
+      max-width: 1000px;
+      margin: 0 auto;
     }
 
     .card {
@@ -99,6 +102,9 @@ _card    .recommendations {
       overflow: hidden;
       box-shadow: 0 4px 8px rgba(0,0,0,0.3);
       transition: transform 0.3s ease;
+      max-width: 300px;   /* Limita el ancho de cada tarjeta */
+      width: 100%;
+      margin: 0 auto;     /* Centra la tarjeta si solo hay una */
     }
 
     .card:hover {
