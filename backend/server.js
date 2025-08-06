@@ -133,6 +133,46 @@ app.get("/perfil", (req, res) => {
 });
 
 // =========================
+// 🔹 COMENTARIOS
+// =========================
+
+// Insertar comentario
+app.post('/comentarios', (req, res) => {
+  const { id_usuario, id_documental, comentario } = req.body;
+
+  if (!comentario || comentario.trim() === '') {
+    return res.status(400).json({ mensaje: "Comentario vacío no permitido" });
+  }
+
+  const sql = `
+    INSERT INTO comentarios (ID_USUARIO, ID_DOCUMENTAL, COMENTARIO)
+    VALUES (?, ?, ?)`;
+
+  db.query(sql, [id_usuario, id_documental, comentario], (err) => {
+    if (err) return res.status(500).json({ mensaje: "Error al agregar comentario" });
+    res.json({ mensaje: "Comentario agregado correctamente" });
+  });
+});
+
+// Obtener comentarios por documental
+app.get('/comentarios/:id_documental', (req, res) => {
+  const { id_documental } = req.params;
+
+  const sql = `
+    SELECT c.COMENTARIO, c.FECHA_COMENTARIO, u.NOMBRE
+    FROM comentarios c
+    JOIN usuario u ON c.ID_USUARIO = u.ID_USUARIO
+    WHERE c.ID_DOCUMENTAL = ? AND c.ESTADO = 1
+    ORDER BY c.FECHA_COMENTARIO DESC`;
+
+  db.query(sql, [id_documental], (err, resultados) => {
+    if (err) return res.status(500).json({ mensaje: "Error al obtener comentarios" });
+    res.json(resultados);
+  });
+});
+
+
+// =========================
 // 🔹 ACTUALIZAR PREFERENCIAS
 // =========================
 app.put("/perfil", (req, res) => {
@@ -249,6 +289,58 @@ app.get('/documental/:id', (req, res) => {
     res.json(results[0]);
   });
 });
+
+app.post('/reaccion', (req, res) => {
+  const { id_usuario, id_documental, tipo_reaccion } = req.body;
+
+  const sql = `
+    INSERT INTO reacciones (ID_USUARIO, ID_DOCUMENTAL, TIPO_REACCION)
+    VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE 
+      TIPO_REACCION = VALUES(TIPO_REACCION), 
+      FECHA_REACCION = CURRENT_TIMESTAMP
+  `;
+
+  db.query(sql, [id_usuario, id_documental, tipo_reaccion], (err, result) => {
+    if (err) {
+      console.error('❌ Error al registrar reacción:', err);
+      return res.status(500).json({ mensaje: "Error al registrar reacción" });
+    }
+
+    res.json({ mensaje: "Reacción registrada correctamente" });
+  });
+});
+
+// Eliminar reacción existente
+app.delete('/reaccion/:idUsuario/:idDocumental', (req, res) => {
+  const { idUsuario, idDocumental } = req.params;
+  const sql = "DELETE FROM reacciones WHERE ID_USUARIO = ? AND ID_DOCUMENTAL = ?";
+  db.query(sql, [idUsuario, idDocumental], (err) => {
+    if (err) return res.status(500).json({ mensaje: "Error al eliminar reacción" });
+    res.json({ mensaje: "Reacción eliminada correctamente" });
+  });
+});
+
+
+app.get('/reaccion/:idUsuario/:idDocumental', (req, res) => {
+  const { idUsuario, idDocumental } = req.params;
+
+  const sql = `
+    SELECT TIPO_REACCION 
+    FROM reacciones 
+    WHERE ID_USUARIO = ? AND ID_DOCUMENTAL = ?
+    ORDER BY FECHA_REACCION DESC
+    LIMIT 1
+  `;
+
+  db.query(sql, [idUsuario, idDocumental], (err, results) => {
+    if (err) return res.status(500).json({ mensaje: "Error al obtener reacción" });
+    if (results.length === 0) return res.json({ tipo_reaccion: null });
+
+    res.json({ tipo_reaccion: results[0].TIPO_REACCION });
+  });
+});
+
 
 // =========================
 // 🔹 INICIAR SERVIDOR

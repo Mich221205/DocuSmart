@@ -1,10 +1,18 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Detalle del Documental - DocuSmart</title>
-  <link rel="stylesheet" href="css/styledetalle.css">
+  <link rel="stylesheet" href="css/styledetalle.css" />
+  <style>
+    .reaccion-activa {
+      background-color: #1d9bf0;
+      color: white;
+      font-weight: bold;
+      border: 2px solid white;
+    }
+  </style>
 </head>
 <body>
   <div class="detail-container">
@@ -12,7 +20,7 @@
       <h1>DocuSmart</h1>
     </div>
     <h2>Detalle del Documental</h2>
-    
+
     <div id="contenido">
       <h3>Cargando...</h3>
     </div>
@@ -21,40 +29,137 @@
   </div>
 
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
+    let reaccionActual = null;
+
+    document.addEventListener("DOMContentLoaded", async () => {
       const params = new URLSearchParams(window.location.search);
       const id = params.get("id");
+      const token = localStorage.getItem("token");
 
-      if (!id) {
-        document.getElementById("contenido").innerHTML = "<p>ID no proporcionado.</p>";
+      if (!id || !token) {
+        document.getElementById("contenido").innerHTML = "<p>ID no proporcionado o sesión no válida.</p>";
         return;
       }
 
-      fetch(`http://localhost:3000/documental/${id}`)
-        .then(res => res.json())
-        .then(doc => {
-          const cont = document.getElementById("contenido");
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const idUsuario = payload.id;
 
-          cont.innerHTML = `
-            <img src="${doc.ruta_imagen || 'img/default.png'}" alt="${doc.TITULO}" style="max-width: 100%; margin-bottom: 20px;">
-            <h3>${doc.TITULO}</h3>
-            <p><strong>Duración:</strong> ${doc.DURACION}</p>
-            <p><strong>Categoría:</strong> ${doc.GENERO}</p>
-            <p><strong>Descripción:</strong> ${doc.DESCRIPCION}</p>
+      try {
+        const resDoc = await fetch(`http://localhost:3000/documental/${id}`);
+        const doc = await resDoc.json();
 
-            <div class="buttons">
-              <a href="${doc.ruta_video}" target="_blank"><button>▶ Ver ahora</button></a>
-              <button>👍 Me gusta</button>
-              <button>👎 No me gusta</button>
-              <button>🚫 No me interesa</button>
+        const cont = document.getElementById("contenido");
+
+        cont.innerHTML = `
+          <img src="${doc.ruta_imagen || 'img/default.png'}" alt="${doc.TITULO}" style="max-width: 100%; margin-bottom: 20px;">
+          <h3>${doc.TITULO}</h3>
+          <p><strong>Duración:</strong> ${doc.DURACION}</p>
+          <p><strong>Categoría:</strong> ${doc.GENERO}</p>
+          <p><strong>Descripción:</strong> ${doc.DESCRIPCION}</p>
+
+          <div class="buttons">
+            <a href="${doc.ruta_video}" target="_blank"><button>▶ Ver ahora</button></a>
+            <button data-reaccion="ME_GUSTA">👍 Me gusta</button>
+            <button data-reaccion="NO_ME_GUSTA">👎 No me gusta</button>
+            <button data-reaccion="NO_ME_INTERESA">🚫 No me interesa</button>
+          </div>
+
+          <div id="comentarios-section">
+            <h4 style="margin-top: 30px;">📝 Comentarios</h4>
+            <div id="lista-comentarios">
+              <p>Cargando comentarios...</p>
             </div>
-          `;
-        })
-        .catch(err => {
-          console.error("❌ Error al obtener detalle:", err);
-          document.getElementById("contenido").innerHTML = "<p>Error al cargar el documental.</p>";
+
+            <textarea id="nuevo-comentario" placeholder="Escribe un comentario..." rows="3" style="width: 100%; margin-top: 10px;"></textarea>
+            <button id="btn-enviar-comentario" style="margin-top: 10px;">Enviar comentario</button>
+          </div>
+        `;
+
+        const resReaccion = await fetch(`http://localhost:3000/reaccion/${idUsuario}/${id}`);
+        const reaccion = await resReaccion.json();
+
+        if (reaccion.tipo_reaccion) {
+          reaccionActual = reaccion.tipo_reaccion;
+          const btn = document.querySelector(`button[data-reaccion="${reaccion.tipo_reaccion}"]`);
+          if (btn) btn.classList.add("reaccion-activa");
+        }
+
+        document.querySelectorAll('button[data-reaccion]').forEach(boton => {
+          boton.addEventListener('click', () => {
+            const tipo = boton.getAttribute('data-reaccion');
+
+            if (tipo === reaccionActual) {
+              eliminarReaccion(idUsuario, id);
+              reaccionActual = null;
+              boton.classList.remove("reaccion-activa");
+            } else {
+              registrarReaccion(tipo, idUsuario, id);
+              reaccionActual = tipo;
+              document.querySelectorAll('button[data-reaccion]').forEach(b => b.classList.remove("reaccion-activa"));
+              boton.classList.add("reaccion-activa");
+            }
+          });
         });
+
+        cargarComentarios();
+
+        document.getElementById("btn-enviar-comentario").addEventListener("click", async () => {
+          const texto = document.getElementById("nuevo-comentario").value.trim();
+          if (!texto) return alert("Comentario vacío no permitido");
+
+          const res = await fetch('http://localhost:3000/comentarios', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_usuario: idUsuario, id_documental: id, comentario: texto })
+          });
+
+          const resultado = await res.json();
+          alert(resultado.mensaje);
+
+          document.getElementById("nuevo-comentario").value = '';
+          cargarComentarios();
+        });
+
+      } catch (err) {
+        console.error("❌ Error al cargar detalle o reacción:", err);
+        document.getElementById("contenido").innerHTML = "<p>Error al cargar el documental.</p>";
+      }
     });
+
+    function registrarReaccion(tipo, idUsuario, idDocumental) {
+      fetch('http://localhost:3000/reaccion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_usuario: idUsuario,
+          id_documental: idDocumental,
+          tipo_reaccion: tipo
+        })
+      });
+    }
+
+    function eliminarReaccion(idUsuario, idDocumental) {
+      fetch(`http://localhost:3000/reaccion/${idUsuario}/${idDocumental}`, {
+        method: 'DELETE'
+      });
+    }
+
+    async function cargarComentarios() {
+      const id = new URLSearchParams(window.location.search).get("id");
+      const res = await fetch(`http://localhost:3000/comentarios/${id}`);
+      const comentarios = await res.json();
+      const contenedor = document.getElementById("lista-comentarios");
+      if (comentarios.length === 0) {
+        contenedor.innerHTML = "<p>No hay comentarios todavía.</p>";
+      } else {
+        contenedor.innerHTML = comentarios.map(c => `
+          <div style="background: #001f54; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+            <strong>${c.NOMBRE}</strong> <span style="font-size: 12px;">(${new Date(c.FECHA_COMENTARIO).toLocaleString()})</span>
+            <p style="margin: 5px 0;">${c.COMENTARIO}</p>
+          </div>
+        `).join('');
+      }
+    }
   </script>
 </body>
 </html>

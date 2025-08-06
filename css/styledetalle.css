@@ -92,3 +92,10 @@
     .back-link:hover {
       color: #00c6ff;
     }
+
+    button.reaccion-activa {
+  background-color: #1d9bf0;
+  color: white;
+  font-weight: bold;
+  border: 2px solid #fff;
+  }
