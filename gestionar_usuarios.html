@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gestionar Usuarios - DocuSmart</title>
+  <link rel="stylesheet" href="css/styleadmin.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to bottom, #001f54, #003b99);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .admin-container {
+      background: rgba(0, 31, 84, 0.9);
+      border-radius: 15px;
+      padding: 30px;
+      max-width: 1100px;
+      width: 100%;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+    }
+
+    h1 {
+      font-size: 26px;
+      margin-bottom: 20px;
+      color: #00c6ff;
+      text-align: center;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+
+    th, td {
+      border: 1px solid #003b99;
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #003b99;
+    }
+
+    tr:nth-child(even) {
+      background: rgba(255,255,255,0.05);
+    }
+
+    button {
+      padding: 6px 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.3s ease;
+    }
+
+    .btn-activar { background: #28a745; }
+    .btn-inactivar { background: #ff3b3b; }
+    .btn-edit { background: #ffc107; margin-right: 5px; }
+
+    button:hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <h1>👥 Gestionar Usuarios</h1>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Correo</th>
+          <th>Rol</th>
+          <th>Fecha de Registro</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tabla-usuarios">
+        <tr><td colspan="6">Cargando...</td></tr>
+      </tbody>
+    </table>
+
+    <button id="volver">⬅ Volver al Panel</button>
+  </div>
+    <script>
+    const token = localStorage.getItem("token");
+
+    // Verificación de acceso admin
+    if (!token) {
+    alert("Debes iniciar sesión");
+    window.location.href = "index.html";
+    } else {
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.rol !== "admin") {
+        alert("No tienes permisos para acceder");
+        window.location.href = "perfil.html";
+        } else {
+        cargarUsuarios();
+        }
+    } catch {
+        localStorage.removeItem("token");
+        window.location.href = "index.html";
+    }
+    }
+
+    function cargarUsuarios() {
+    fetch("http://localhost:3000/admin/usuarios", {
+        headers: { "Authorization": "Bearer " + token }
+    })
+    .then(res => res.json())
+    .then(data => {
+        const tbody = document.getElementById("tabla-usuarios");
+        tbody.innerHTML = "";
+        data.forEach(u => {
+        tbody.innerHTML += `
+            <tr>
+            <td>${u.NOMBRE}</td>
+            <td>${u.CORREO || ''}</td>
+            <td>${u.ROL}</td>
+            <td>${u.FECHA_REGISTRO ? new Date(u.FECHA_REGISTRO).toLocaleString() : ''}</td>
+            <td>${u.ESTADO == 1 ? 'Activo' : 'Inactivo'}</td>
+            <td>
+                <button class="btn-edit" onclick="editar(${u.ID_USUARIO})">✏ Editar</button>
+                ${u.ESTADO == 1 
+                ? `<button class="btn-inactivar" onclick="cambiarEstado(${u.ID_USUARIO},0)">Inactivar</button>`
+                : `<button class="btn-activar" onclick="cambiarEstado(${u.ID_USUARIO},1)">Activar</button>`}
+            </td>
+            </tr>
+        `;
+        });
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Error al cargar usuarios");
+    });
+    }
+
+    function cambiarEstado(id, nuevoEstado) {
+    fetch(`http://localhost:3000/admin/usuarios/${id}/estado`, {
+        method: "PUT",
+        headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ estado: nuevoEstado })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.mensaje);
+        cargarUsuarios();
+    });
+    }
+
+
+    function editar(id) {
+    const nuevoNombre = prompt("Ingrese el nuevo nombre:");
+    const nuevoCorreo = prompt("Ingrese el nuevo correo:");
+    const nuevoRol = prompt("Ingrese el rol (admin/usuario):");
+
+    if (!nuevoNombre || !nuevoRol) {
+        alert("Nombre y rol son obligatorios");
+        return;
+    }
+
+    fetch(`http://localhost:3000/admin/usuarios/${id}`, {
+        method: "PUT",
+        headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+        nombre: nuevoNombre,
+        correo: nuevoCorreo,
+        rol: nuevoRol
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.mensaje);
+        cargarUsuarios();
+    });
+    }
+    document.getElementById("volver").addEventListener("click", () => {
+    window.location.href = "admin.html";
+    });
+    </script>
+</body>
+</html>

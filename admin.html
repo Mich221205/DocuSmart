@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Panel Administrador - DocuSmart</title>
+  <link rel="stylesheet" href="css/styleadmin.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to bottom, #001f54, #003b99);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .admin-container {
+      background: rgba(0, 31, 84, 0.9);
+      border-radius: 15px;
+      padding: 30px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 26px;
+      margin-bottom: 10px;
+      color: #00c6ff;
+    }
+
+    p {
+      font-size: 16px;
+      margin-bottom: 20px;
+    }
+
+    nav ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    nav ul li {
+      margin: 15px 0;
+    }
+
+    nav ul li a {
+      display: block;
+      background: #003b99;
+      color: #fff;
+      padding: 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: bold;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    nav ul li a:hover {
+      background: #0072ff;
+      transform: scale(1.05);
+    }
+
+    #logout {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: #ff3b3b;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    #logout:hover {
+      background: #ff5c5c;
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <h1>Panel de Administración</h1>
+    <p>Bienvenido, <span id="nombre-admin"></span></p>
+
+    <nav>
+      <ul>
+        <li><a href="gestionar_documentales.html">📂 Gestionar Documentales</a></li>
+        <li><a href="gestionar_usuarios.html">👥 Gestionar Usuarios</a></li>
+        <li><a href="gestionar_comentarios.html">💬 Gestionar Comentarios</a></li>
+      </ul>
+    </nav>
+
+    <button id="logout">Cerrar sesión</button>
+  </div>
+    <script>
+    // Verificar token y rol
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+        alert("Debes iniciar sesión");
+        window.location.href = "index.html";
+    } else {
+        try {
+        const payload = JSON.parse(atob(token.split('.')[1])); // Decodificar token
+
+        if (payload.rol !== "admin") {
+            alert("No tienes permisos para acceder a esta página");
+            window.location.href = "perfil.html";
+        } else {
+            // ✅ Si es admin, obtener el nombre real desde backend
+            fetch("http://localhost:3000/perfil", {
+            headers: { "Authorization": "Bearer " + token }
+            })
+            .then(res => res.json())
+            .then(data => {
+            if (data.NOMBRE) {
+                document.getElementById("nombre-admin").textContent = data.NOMBRE;
+            } else {
+                document.getElementById("nombre-admin").textContent = "Administrador";
+            }
+            })
+            .catch(err => {
+            console.error("Error al obtener datos del admin:", err);
+            document.getElementById("nombre-admin").textContent = "Administrador";
+            });
+        }
+        } catch (e) {
+        console.error("Token inválido:", e);
+        localStorage.removeItem("token");
+        window.location.href = "index.html";
+        }
+    }
+
+    // Cerrar sesión
+    document.getElementById("logout").addEventListener("click", () => {
+        localStorage.removeItem("token");
+        window.location.href = "index.html";
+    });
+    </script>
+</body>
+</html>

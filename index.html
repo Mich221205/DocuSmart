@@ -43,10 +43,15 @@
         alert(data.mensaje);
 
         if (respuesta.ok) {
-          // ✅ Guardamos el token en localStorage
+          // ✅ Guardamos el token
           localStorage.setItem("token", data.token);
-          // ✅ Redirigimos al perfil
-          window.location.href = "perfil.html";
+
+          // ✅ Revisamos el rol y decidimos a dónde va
+          if (data.rol === "admin") {
+            window.location.href = "admin.html"; // página del panel administrador
+          } else {
+            window.location.href = "perfil.html"; // página normal de usuario
+          }
         }
       } catch (error) {
         alert("Error al conectar con el servidor");

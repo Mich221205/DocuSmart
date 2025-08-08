@@ -7,8 +7,27 @@ const cors = require('cors');
 const mysql = require('mysql2');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-
 const app = express();
+
+// Middleware para verificar que el usuario sea admin
+function soloAdmin(req, res, next) {
+  const token = req.headers["authorization"]?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ mensaje: "Token no proporcionado" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, SECRET_KEY);
+    if (decoded.rol !== "admin") {
+      return res.status(403).json({ mensaje: "No tienes permisos de administrador" });
+    }
+    req.user = decoded; // opcional, por si quieres usar datos del usuario en la ruta
+    next();
+  } catch (err) {
+    return res.status(403).json({ mensaje: "Token inválido o expirado" });
+  }
+}
+
 app.use(express.static(__dirname)); 
 app.use('/css', express.static(__dirname + '/css'));
 app.use(cors());
@@ -18,7 +37,7 @@ app.use(express.json());
 const db = mysql.createConnection({
   host: 'localhost',
   user: 'root',
-  password: '', // agrega tu password si la tienes
+  password: '', 
   database: 'docusmart'
 });
 
@@ -58,33 +77,53 @@ app.post('/registro', async (req, res) => {
 });
 
 // =========================
-// 🔹 LOGIN
+// 🔹 LOGIN (bloquea usuario inactivo)
 // =========================
 app.post('/login', (req, res) => {
   const { correo, contrasena } = req.body;
 
-  db.query("SELECT * FROM USUARIO WHERE CORREO = ?", [correo], async (err, results) => {
-    if (err) return res.status(500).json({ mensaje: "Error en el servidor" });
-    if (results.length === 0) return res.status(401).json({ mensaje: "Usuario no encontrado" });
+  // ✅ Solo busca usuarios activos
+  db.query(
+    "SELECT * FROM USUARIO WHERE CORREO = ? AND ESTADO = 1",
+    [correo],
+    async (err, results) => {
+      if (err) return res.status(500).json({ mensaje: "Error en el servidor" });
 
-    const usuario = results[0];
+      // Si no encuentra, o está inactivo, mensaje genérico
+      if (results.length === 0) {
+        return res.status(401).json({ mensaje: "Usuario no encontrado o inactivo" });
+      }
 
-    // 🟢 Depuración
-    console.log("Usuario encontrado:", usuario);
-    console.log("Contraseña recibida:", contrasena);
-    console.log("Hash en BD:", usuario.CONTRASENNA);
+      const usuario = results[0];
 
-    if (!contrasena || !usuario.CONTRASENNA) {
-      return res.status(400).json({ mensaje: "Datos incompletos para comparar contraseñas" });
+      // 🔍 Verificación extra por seguridad
+      if (Number(usuario.ESTADO) !== 1) {
+        return res.status(403).json({ mensaje: "Usuario inactivo. Contacte al administrador." });
+      }
+
+      if (!contrasena || !usuario.CONTRASENNA) {
+        return res.status(400).json({ mensaje: "Datos incompletos para comparar contraseñas" });
+      }
+
+      const match = await bcrypt.compare(contrasena, usuario.CONTRASENNA);
+      if (!match) {
+        return res.status(401).json({ mensaje: "Contraseña incorrecta" });
+      }
+
+      // 🔹 Incluimos el ROL en el token
+      const token = jwt.sign(
+        { id: usuario.ID_USUARIO, rol: usuario.ROL || 'usuario' },
+        SECRET_KEY,
+        { expiresIn: "1h" }
+      );
+
+      res.json({
+        mensaje: "Login correcto",
+        token,
+        rol: usuario.ROL || 'usuario'
+      });
     }
-
-    const match = await bcrypt.compare(contrasena, usuario.CONTRASENNA);
-
-    if (!match) return res.status(401).json({ mensaje: "Contraseña incorrecta" });
-
-    const token = jwt.sign({ id: usuario.ID_USUARIO }, SECRET_KEY, { expiresIn: "1h" });
-    res.json({ mensaje: "Login correcto", token });
-  });
+  );
 });
 
 // =========================
@@ -240,6 +279,7 @@ app.get('/recomendaciones/:idUsuario', (req, res) => {
     LEFT JOIN imagenes_documentales img ON d.ID_DOCUMENTAL = img.id_documental
     WHERE p.ID_USUARIO = ?
       AND hv.ID_DOCUMENTAL IS NULL
+      AND d.ESTADO = 1
     GROUP BY d.ID_DOCUMENTAL, d.TITULO, d.DESCRIPCION, g.DESCRIPCION
     LIMIT 10
   `;
@@ -272,7 +312,8 @@ app.get('/documental/:id', (req, res) => {
     JOIN genero g ON d.ID_GENERO = g.ID_GENERO
     LEFT JOIN video_documentales vd ON d.ID_DOCUMENTAL = vd.ID_DOCUMENTAL
     LEFT JOIN imagenes_documentales img ON d.ID_DOCUMENTAL = img.id_documental
-    WHERE d.ID_DOCUMENTAL = ?
+    WHERE d.ID_DOCUMENTAL = ? 
+    AND d.ESTADO = 1
   `;
 
   db.query(sql, [id], (err, results) => {
@@ -338,6 +379,153 @@ app.get('/reaccion/:idUsuario/:idDocumental', (req, res) => {
     if (results.length === 0) return res.json({ tipo_reaccion: null });
 
     res.json({ tipo_reaccion: results[0].TIPO_REACCION });
+  });
+});
+
+app.get("/admin/documentales", soloAdmin, (req, res) => {
+  const sql = `
+    SELECT d.ID_DOCUMENTAL, d.TITULO, d.DURACION, g.DESCRIPCION AS GENERO, d.ESTADO
+    FROM documental d
+    JOIN genero g ON d.ID_GENERO = g.ID_GENERO
+    ORDER BY d.ID_DOCUMENTAL DESC
+  `;
+  
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("❌ Error al obtener documentales:", err);
+      return res.status(500).json({ mensaje: "Error en la base de datos" });
+    }
+    res.json(results || []);
+  });
+});
+
+// 📌 Listar documentales (solo activos para usuarios, todos para admin)
+app.get("/admin/documentales", (req, res) => {
+  const sql = `
+    SELECT d.ID_DOCUMENTAL, d.TITULO, d.DURACION, g.DESCRIPCION AS GENERO, d.ESTADO
+    FROM documental d
+    JOIN genero g ON d.ID_GENERO = g.ID_GENERO
+    ORDER BY d.ID_DOCUMENTAL DESC
+  `;
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json({ mensaje: "Error en la base de datos" });
+    res.json(results);
+  });
+});
+
+// 📌 Inactivar documental
+app.put("/admin/documentales/:id/inactivar", (req, res) => {
+  const id = req.params.id;
+  const sql = "UPDATE documental SET ESTADO = 0 WHERE ID_DOCUMENTAL = ?";
+  db.query(sql, [id], (err, result) => {
+    if (err) return res.status(500).json({ mensaje: "Error al inactivar documental" });
+    res.json({ mensaje: "Documental inactivado correctamente" });
+  });
+});
+
+// 📌 Reactivar documental
+app.put("/admin/documentales/:id/activar", (req, res) => {
+  const id = req.params.id;
+  const sql = "UPDATE documental SET ESTADO = 1 WHERE ID_DOCUMENTAL = ?";
+  db.query(sql, [id], (err, result) => {
+    if (err) return res.status(500).json({ mensaje: "Error al activar documental" });
+    res.json({ mensaje: "Documental activado correctamente" });
+  });
+});
+
+// =========================
+// 🔹 LISTAR USUARIOS (solo admin)
+// =========================
+app.get("/admin/usuarios", soloAdmin, (req, res) => {
+  const sql = `
+    SELECT ID_USUARIO, NOMBRE, CORREO, ROL, FECHA_REGISTRO, ESTADO
+    FROM usuario
+    ORDER BY FECHA_REGISTRO DESC
+  `;
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("❌ Error al obtener usuarios:", err);
+      return res.status(500).json({ mensaje: "Error al obtener usuarios" });
+    }
+    res.json(results || []);
+  });
+});
+
+// =========================
+// 🔹 CAMBIAR ESTADO DE USUARIO (solo admin)
+// =========================
+app.put("/admin/usuarios/:id/estado", soloAdmin, (req, res) => {
+  const { id } = req.params;
+  const { estado } = req.body;
+
+  if (estado !== 0 && estado !== 1) {
+    return res.status(400).json({ mensaje: "Estado inválido" });
+  }
+
+  const sql = "UPDATE usuario SET ESTADO = ? WHERE ID_USUARIO = ?";
+  db.query(sql, [estado, id], (err, result) => {
+    if (err) {
+      console.error("❌ Error al cambiar estado:", err);
+      return res.status(500).json({ mensaje: "Error al cambiar estado" });
+    }
+    res.json({ mensaje: `Usuario ${estado === 1 ? "activado" : "inactivado"} correctamente` });
+  });
+});
+
+// =========================
+// 🔹 EDITAR USUARIO (solo admin)
+// =========================
+app.put("/admin/usuarios/:id", soloAdmin, (req, res) => {
+  const { id } = req.params;
+  const { nombre, correo, rol } = req.body;
+
+  if (!nombre || !rol) {
+    return res.status(400).json({ mensaje: "Nombre y rol son obligatorios" });
+  }
+
+  const sql = "UPDATE usuario SET NOMBRE = ?, CORREO = ?, ROL = ? WHERE ID_USUARIO = ?";
+  db.query(sql, [nombre, correo, rol, id], (err, result) => {
+    if (err) {
+      console.error("❌ Error al actualizar usuario:", err);
+      return res.status(500).json({ mensaje: "Error al actualizar usuario" });
+    }
+    res.json({ mensaje: "Usuario actualizado correctamente" });
+  });
+});
+
+app.get("/admin/comentarios", soloAdmin, (req, res) => {
+  const sql = `
+    SELECT c.ID_COMENTARIO, u.NOMBRE AS NOMBRE_USUARIO, d.TITULO AS TITULO_DOCUMENTAL,
+           c.COMENTARIO, c.FECHA_COMENTARIO, c.ESTADO
+    FROM comentarios c
+    JOIN usuario u ON c.ID_USUARIO = u.ID_USUARIO
+    JOIN documental d ON c.ID_DOCUMENTAL = d.ID_DOCUMENTAL
+    ORDER BY c.FECHA_COMENTARIO DESC
+  `;
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("❌ Error al obtener comentarios:", err);
+      return res.status(500).json({ mensaje: "Error al obtener comentarios" });
+    }
+    res.json(results || []);
+  });
+});
+
+app.put("/admin/comentarios/:id/estado", soloAdmin, (req, res) => {
+  const { id } = req.params;
+  const { estado } = req.body;
+
+  if (estado !== 0 && estado !== 1) {
+    return res.status(400).json({ mensaje: "Estado inválido" });
+  }
+
+  const sql = "UPDATE comentarios SET ESTADO = ? WHERE ID_COMENTARIO = ?";
+  db.query(sql, [estado, id], (err, result) => {
+    if (err) {
+      console.error("❌ Error al cambiar estado del comentario:", err);
+      return res.status(500).json({ mensaje: "Error al cambiar estado del comentario" });
+    }
+    res.json({ mensaje: `Comentario ${estado === 1 ? "activado" : "inactivado"} correctamente` });
   });
 });
 

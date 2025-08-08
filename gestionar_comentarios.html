@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gestionar Comentarios - DocuSmart</title>
+  <link rel="stylesheet" href="css/styleadmin.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to bottom, #001f54, #003b99);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .admin-container {
+      background: rgba(0, 31, 84, 0.9);
+      border-radius: 15px;
+      padding: 30px;
+      max-width: 1200px;
+      width: 100%;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+    }
+
+    h1 {
+      font-size: 26px;
+      margin-bottom: 20px;
+      color: #00c6ff;
+      text-align: center;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+
+    th, td {
+      border: 1px solid #003b99;
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #003b99;
+    }
+
+    tr:nth-child(even) {
+      background: rgba(255,255,255,0.05);
+    }
+
+    button {
+      padding: 6px 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.3s ease;
+    }
+
+    .btn-activar { background: #28a745; }
+    .btn-inactivar { background: #ff3b3b; }
+    button:hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <h1>💬 Gestionar Comentarios</h1>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Documental</th>
+          <th>Comentario</th>
+          <th>Fecha</th>
+          <th>Estado</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody id="tabla-comentarios">
+        <tr><td colspan="6">Cargando...</td></tr>
+      </tbody>
+    </table>
+
+    <button id="volver">⬅ Volver al Panel</button>
+  </div>
+
+  <script>
+    const token = localStorage.getItem("token");
+
+    // Validación de admin
+    if (!token) {
+      alert("Debes iniciar sesión");
+      window.location.href = "index.html";
+    } else {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.rol !== "admin") {
+          alert("No tienes permisos para acceder");
+          window.location.href = "perfil.html";
+        } else {
+          cargarComentarios();
+        }
+      } catch {
+        localStorage.removeItem("token");
+        window.location.href = "index.html";
+      }
+    }
+
+    function cargarComentarios() {
+      fetch("http://localhost:3000/admin/comentarios", {
+        headers: { "Authorization": "Bearer " + token }
+      })
+      .then(res => res.json())
+      .then(data => {
+        const tbody = document.getElementById("tabla-comentarios");
+        tbody.innerHTML = "";
+        data.forEach(c => {
+          tbody.innerHTML += `
+            <tr>
+              <td>${c.NOMBRE_USUARIO}</td>
+              <td>${c.TITULO_DOCUMENTAL}</td>
+              <td>${c.COMENTARIO}</td>
+              <td>${c.FECHA_COMENTARIO ? new Date(c.FECHA_COMENTARIO).toLocaleString() : ''}</td>
+              <td>${c.ESTADO == 1 ? 'Activo' : 'Inactivo'}</td>
+              <td>
+                ${c.ESTADO == 1
+                  ? `<button class="btn-inactivar" onclick="cambiarEstado(${c.ID_COMENTARIO},0)">Inactivar</button>`
+                  : `<button class="btn-activar" onclick="cambiarEstado(${c.ID_COMENTARIO},1)">Activar</button>`}
+              </td>
+            </tr>
+          `;
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error al cargar comentarios");
+      });
+    }
+
+    function cambiarEstado(id, nuevoEstado) {
+      fetch(`http://localhost:3000/admin/comentarios/${id}/estado`, {
+        method: "PUT",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ estado: nuevoEstado })
+      })
+      .then(res => res.json())
+      .then(data => {
+        alert(data.mensaje);
+        cargarComentarios();
+      });
+    }
+
+    document.getElementById("volver").addEventListener("click", () => {
+      window.location.href = "admin.html";
+    });
+  </script>
+</body>
+</html>

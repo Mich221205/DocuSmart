@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gestionar Documentales - DocuSmart</title>
+  <link rel="stylesheet" href="css/styleadmin.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to bottom, #001f54, #003b99);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .admin-container {
+      background: rgba(0, 31, 84, 0.9);
+      border-radius: 15px;
+      padding: 30px;
+      max-width: 1000px;
+      width: 100%;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+    }
+
+    h1 {
+      font-size: 26px;
+      margin-bottom: 20px;
+      color: #00c6ff;
+      text-align: center;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+
+    th, td {
+      border: 1px solid #003b99;
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #003b99;
+    }
+
+    tr:nth-child(even) {
+      background: rgba(255,255,255,0.05);
+    }
+
+    button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.3s ease;
+    }
+
+    .btn-add {
+      background: #00c6ff;
+      margin-bottom: 15px;
+    }
+
+    .btn-edit {
+      background: #ffc107;
+      margin-right: 5px;
+    }
+
+    .btn-delete {
+      background: #ff3b3b;
+    }
+
+    button:hover {
+      opacity: 0.85;
+    }
+
+    /* Formulario agregar */
+    #formAgregar {
+      background: rgba(0,0,0,0.4);
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    #formAgregar input,
+    #formAgregar textarea,
+    #formAgregar select {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 12px;
+      border: none;
+      border-radius: 6px;
+    }
+
+    #formAgregar button {
+      background: #28a745;
+      color: white;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <h1>📂 Gestionar Documentales</h1>
+
+    <!-- Tabla de documentales -->
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Título</th>
+          <th>Género</th>
+          <th>Duración</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tabla-documentales">
+        <tr><td colspan="5">Cargando...</td></tr>
+      </tbody>
+    </table>
+
+    <button id="volver">⬅ Volver al Panel</button>
+  </div>
+
+  <script>
+    const token = localStorage.getItem("token");
+
+    // Validación admin
+    if (!token) {
+      alert("Debes iniciar sesión");
+      window.location.href = "index.html";
+    } else {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.rol !== "admin") {
+          alert("No tienes permisos para acceder a esta página");
+          window.location.href = "perfil.html";
+        } else {
+          cargarDocumentales();
+        }
+      } catch {
+        localStorage.removeItem("token");
+        window.location.href = "index.html";
+      }
+    }
+
+    document.getElementById("volver").addEventListener("click", function() {
+      window.location.href = "admin.html"; // redirige al archivo admin.html
+    });
+
+    function cargarDocumentales() {
+      fetch("http://localhost:3000/admin/documentales", {
+        headers: { "Authorization": "Bearer " + token }
+      })
+      .then(res => res.json())
+      .then(data => {
+        const tbody = document.getElementById("tabla-documentales");
+        tbody.innerHTML = "";
+        data.forEach(doc => {
+          tbody.innerHTML += `
+            <tr>
+              <td>${doc.ID_DOCUMENTAL}</td>
+              <td>${doc.TITULO}</td>
+              <td>${doc.GENERO}</td>
+              <td>${doc.DURACION}</td>
+              <td>
+                <button class="btn-edit" onclick="editar(${doc.ID_DOCUMENTAL})">✏ Editar</button>
+                <button class="btn-delete" onclick="eliminar(${doc.ID_DOCUMENTAL})">🗑 Eliminar</button>
+              </td>
+            </tr>
+          `;
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error al cargar documentales");
+      });
+    }
+
+    function eliminar(id) {
+    if (confirm("¿Seguro que deseas inactivar este documental?")) {
+        fetch(`http://localhost:3000/admin/documentales/${id}/inactivar`, {
+        method: "PUT",
+        headers: { "Authorization": "Bearer " + token }
+        })
+        .then(res => res.json())
+        .then(data => {
+        alert(data.mensaje);
+        cargarDocumentales();
+        });
+    }
+    }
+
+    function activar(id) {
+    if (confirm("¿Deseas reactivar este documental?")) {
+        fetch(`http://localhost:3000/admin/documentales/${id}/activar`, {
+        method: "PUT",
+        headers: { "Authorization": "Bearer " + token }
+        })
+        .then(res => res.json())
+        .then(data => {
+        alert(data.mensaje);
+        cargarDocumentales();
+        });
+    }
+    }
+
+
+    function editar(id) {
+      alert("Aquí iría la lógica para editar el documental con ID " + id);
+    }
+
+    // Mostrar/ocultar formulario
+    document.getElementById("btnAgregar").addEventListener("click", () => {
+      const form = document.getElementById("formAgregar");
+      form.style.display = form.style.display === "none" ? "block" : "none";
+    });
+
+    // Guardar documental
+    document.getElementById("formAgregar").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(e.target);
+
+      const res = await fetch("http://localhost:3000/admin/documentales", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token },
+        body: formData
+      });
+
+      const data = await res.json();
+      alert(data.mensaje);
+      if (res.ok) {
+        e.target.reset();
+        e.target.style.display = "none";
+        cargarDocumentales();
+      }
+    });
+
+    document.getElementById("volver").addEventListener("click", () => {
+      window.location.href = "admin.html";
+    });
+  </script>
+</body>
+</html>
